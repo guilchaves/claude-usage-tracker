@@ -6,7 +6,7 @@ description = "A TUI to estimate the API-equivalent cost of your Claude Code usa
 license = "MIT"
 
 [[bin]]
-name = "cusage"
+name = "ctracker"
 path = "src/main.rs"
 
 [dependencies]

@@ -1,4 +1,4 @@
-# Context: claude-usage-tracker (`cusage`)
+# Context: claude-usage-tracker (`ctracker`)
 
 A terminal dashboard that estimates the **API-equivalent cost** of your Claude
 Code usage. Claude Code subscriptions aren't billed per token, so there is no

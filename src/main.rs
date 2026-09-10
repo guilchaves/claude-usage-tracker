@@ -1,4 +1,4 @@
-//! `cusage` — a TUI that estimates the API-equivalent cost of your Claude Code
+//! `ctracker` — a TUI that estimates the API-equivalent cost of your Claude Code
 //! usage, computed from the local session transcripts under `~/.claude/projects`.
 //!
 //! The code is split into a pure [`core`] (parse, price, analyze — no I/O, no
