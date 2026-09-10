@@ -1,4 +1,4 @@
-# claude-usage-tracker (`cusage`)
+# claude-usage-tracker (`ctracker`)
 
 A terminal dashboard that estimates the **API-equivalent cost** of your Claude
 Code usage, computed from the local session transcripts in `~/.claude/projects`.
