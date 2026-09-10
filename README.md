@@ -9,16 +9,19 @@ Inspired by T3 Code's Usage page and `ccusage`.
 
 ## What it shows
 
-- **Overview** — headline estimate, cache savings, tokens/turns, and a per-day
-  cost trend.
-- **By model** — cost, turns, tokens, and cache savings per model.
-- **By project** — spend grouped by working directory.
-- **Session** — a live meter for the current (most recent) session, plus a table
-  of recent sessions.
+A single dashboard modeled on Claude Code's Usage panel:
 
-Time ranges: Today / 7 days / 30 days / All time. The dashboard refreshes about
-once a second, reading only newly appended transcript bytes, so it tracks a
-running session live.
+- a headline **estimate** (or token count), `N sessions · API estimate`, and a
+  Claude Code provider row;
+- a **Daily cost** line chart;
+- a **Totals** row — processed / cached / uncached / output tokens and cache
+  savings;
+- a **Breakdown** table (Cost · Share · Tokens) you can group by **Model**,
+  **Day**, **Project**, or **Session**.
+
+Toggle the headline between **Cost** and **Tokens**. Time ranges: Past 24h /
+7 / 30 / 90 days / All. The dashboard refreshes about once a second, reading
+only newly appended transcript bytes, so it tracks a running session live.
 
 ## Usage
 
@@ -28,8 +31,8 @@ cargo run --release -- --once  # print a one-shot summary (good for scripts)
 cargo run --release -- --render 0   # print one dashboard frame as text (0..3 = tab)
 ```
 
-Keys: `←/→` (or Tab) switch tabs · `t` `w` `m` `a` set the range · `r` refresh ·
-`q` quit.
+Keys: `←/→` (or Tab) change the breakdown grouping · `1`–`5` set the range ·
+`space` toggle Cost/Tokens · `r` refresh · `q` quit.
 
 Environment:
 
