@@ -1,0 +1,24 @@
+[package]
+name = "claude-usage-tracker"
+version = "0.1.0"
+edition = "2021"
+description = "A TUI to estimate the API-equivalent cost of your Claude Code usage, computed from local session transcripts."
+license = "MIT"
+
+[[bin]]
+name = "cusage"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+jiff = { version = "0.1", features = ["tz-system"] }
+ratatui = "0.29"
+crossterm = "0.28"
+notify = "6"
+ureq = { version = "2", features = ["json"] }
+dirs = "5"
+
+[profile.release]
+lto = true
+codegen-units = 1
