@@ -12,7 +12,7 @@ mod tui;
 use std::io;
 
 use crate::core::analysis::analyze;
-use crate::shell::config::{now_ms, start_of_today_ms, Config};
+use crate::shell::config::Config;
 use crate::shell::{prices, scan::Scanner};
 
 fn main() -> io::Result<()> {
@@ -33,7 +33,7 @@ fn main() -> io::Result<()> {
     // `--render [tab]` prints one frame of the dashboard as text (no live TTY).
     if let Some(pos) = args.iter().position(|arg| arg == "--render") {
         let tab = args.get(pos + 1).and_then(|s| s.parse::<usize>().ok()).unwrap_or(0);
-        print!("{}", tui::render_to_string(&config, &prices, &scanner, tab, 84, 26));
+        print!("{}", tui::render_to_string(&config, &prices, &scanner, tab, 120, 30));
         return Ok(());
     }
 
@@ -41,8 +41,6 @@ fn main() -> io::Result<()> {
 }
 
 fn print_once(config: &Config, prices: &prices::Prices, scanner: &Scanner) {
-    let now = now_ms();
-    let _ = start_of_today_ms(now, &config.tz); // (range filtering is a TUI concern)
     let analysis = analyze(scanner.records(), &prices.table, config.day_mapper());
     let o = &analysis.overall;
 

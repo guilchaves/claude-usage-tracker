@@ -61,15 +61,6 @@ pub struct Analysis {
     pub duplicates_dropped: u64,
 }
 
-impl Analysis {
-    /// The line for the current session, if one is known.
-    #[must_use]
-    pub fn current_session(&self) -> Option<(&str, &Line)> {
-        let id = self.latest_session.as_deref()?;
-        self.by_session.get(id).map(|line| (id, line))
-    }
-}
-
 /// The label used for turns whose working directory the transcript omitted.
 pub const UNKNOWN_PROJECT: &str = "(unknown)";
 
@@ -182,7 +173,7 @@ mod tests {
         assert_eq!(a.duplicates_dropped, 1);
         assert_eq!(a.overall.records, 2);
         assert_eq!(a.latest_session.as_deref(), Some("new"));
-        assert_eq!(a.current_session().map(|(id, _)| id), Some("new"));
+        assert!(a.by_session.contains_key("new"));
     }
 
     #[test]

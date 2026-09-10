@@ -52,19 +52,6 @@ pub fn now_ms() -> i64 {
     jiff::Timestamp::now().as_millisecond()
 }
 
-/// Midnight (local start of today) as Unix milliseconds, for the "Today" range.
-#[must_use]
-pub fn start_of_today_ms(now_ms: i64, tz: &TimeZone) -> i64 {
-    let Ok(ts) = jiff::Timestamp::from_millisecond(now_ms) else {
-        return i64::MIN;
-    };
-    let today = ts.to_zoned(tz.clone()).date();
-    match today.to_zoned(tz.clone()) {
-        Ok(midnight) => midnight.timestamp().as_millisecond(),
-        Err(_) => i64::MIN,
-    }
-}
-
 /// The wall-clock time in `tz` as `HH:MM:SS`, for the footer's "updated" label.
 #[must_use]
 pub fn clock_hms(tz: &TimeZone) -> String {

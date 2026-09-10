@@ -11,84 +11,101 @@ use crate::shell::prices::PriceSource;
 /// Milliseconds in a day, for range cutoffs.
 const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 
-/// The dashboard's tabs. Overview leads; the rest are breakdowns.
+/// The time window the figures cover, mirroring the reference dashboard's
+/// selector (Past 24h / 7 / 30 / 90 days), plus an all-time option.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Tab {
-    Overview,
+pub enum Range {
+    Day,
+    Week,
+    Month,
+    Quarter,
+    All,
+}
+
+impl Range {
+    pub const ALL: [Range; 5] = [Range::Day, Range::Week, Range::Month, Range::Quarter, Range::All];
+
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Range::Day => "Past 24h",
+            Range::Week => "7 days",
+            Range::Month => "30 days",
+            Range::Quarter => "90 days",
+            Range::All => "All",
+        }
+    }
+
+    /// The earliest timestamp (Unix ms) inside this rolling window.
+    #[must_use]
+    pub fn cutoff_ms(self, now_ms: i64) -> i64 {
+        match self {
+            Range::Day => now_ms - DAY_MS,
+            Range::Week => now_ms - 7 * DAY_MS,
+            Range::Month => now_ms - 30 * DAY_MS,
+            Range::Quarter => now_ms - 90 * DAY_MS,
+            Range::All => i64::MIN,
+        }
+    }
+}
+
+/// Whether the dashboard leads with dollars or tokens.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Metric {
+    Cost,
+    Tokens,
+}
+
+impl Metric {
+    #[must_use]
+    pub fn toggled(self) -> Metric {
+        match self {
+            Metric::Cost => Metric::Tokens,
+            Metric::Tokens => Metric::Cost,
+        }
+    }
+}
+
+/// Which dimension the bottom breakdown table groups by.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Breakdown {
     Model,
+    Day,
     Project,
     Session,
 }
 
-impl Tab {
-    pub const ALL: [Tab; 4] = [Tab::Overview, Tab::Model, Tab::Project, Tab::Session];
+impl Breakdown {
+    pub const ALL: [Breakdown; 4] = [Breakdown::Model, Breakdown::Day, Breakdown::Project, Breakdown::Session];
 
     #[must_use]
-    pub fn title(self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
-            Tab::Overview => "Overview",
-            Tab::Model => "By model",
-            Tab::Project => "By project",
-            Tab::Session => "Session",
+            Breakdown::Model => "Model",
+            Breakdown::Day => "Day",
+            Breakdown::Project => "Project",
+            Breakdown::Session => "Session",
         }
     }
 
     #[must_use]
     pub fn index(self) -> usize {
-        Tab::ALL.iter().position(|&t| t == self).unwrap_or(0)
+        Breakdown::ALL.iter().position(|&b| b == self).unwrap_or(0)
     }
 
     #[must_use]
-    fn step(self, delta: isize) -> Tab {
-        let len = Tab::ALL.len() as isize;
+    fn step(self, delta: isize) -> Breakdown {
+        let len = Breakdown::ALL.len() as isize;
         let next = (self.index() as isize + delta).rem_euclid(len);
-        Tab::ALL[next as usize]
-    }
-}
-
-/// The time window the figures cover.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Range {
-    Today,
-    Week,
-    Month,
-    All,
-}
-
-impl Range {
-    #[must_use]
-    pub fn label(self) -> &'static str {
-        match self {
-            Range::Today => "Today",
-            Range::Week => "7 days",
-            Range::Month => "30 days",
-            Range::All => "All time",
-        }
-    }
-
-    /// The earliest timestamp (Unix ms) that falls inside this range.
-    ///
-    /// `start_of_today_ms` is supplied by the shell because "the start of
-    /// today" depends on the timezone, which the core does not read.
-    #[must_use]
-    pub fn cutoff_ms(self, now_ms: i64, start_of_today_ms: i64) -> i64 {
-        match self {
-            Range::Today => start_of_today_ms,
-            Range::Week => now_ms - 7 * DAY_MS,
-            Range::Month => now_ms - 30 * DAY_MS,
-            Range::All => i64::MIN,
-        }
+        Breakdown::ALL[next as usize]
     }
 }
 
 /// What a keystroke asks the run loop to do next.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outcome {
-    /// Nothing further; just redraw.
     None,
-    /// The window changed; re-fold the records.
     Recompute,
-    /// Leave.
     Quit,
 }
 
@@ -96,9 +113,10 @@ pub enum Outcome {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Key {
     Quit,
-    NextTab,
-    PrevTab,
+    NextBreakdown,
+    PrevBreakdown,
     Range(Range),
+    ToggleMetric,
     Refresh,
     Other,
 }
@@ -107,8 +125,9 @@ pub enum Key {
 pub struct App {
     pub analysis: Analysis,
     pub source: PriceSource,
-    pub tab: Tab,
     pub range: Range,
+    pub metric: Metric,
+    pub breakdown: Breakdown,
     pub tz_label: String,
     /// Wall-clock of the last refresh, `HH:MM:SS`, for the footer.
     pub updated_at: String,
@@ -120,23 +139,30 @@ impl App {
         App {
             analysis: Analysis::default(),
             source,
-            tab: Tab::Overview,
-            range: Range::All,
+            range: Range::Month, // matches the reference default (30 days)
+            metric: Metric::Cost,
+            breakdown: Breakdown::Model,
             tz_label,
             updated_at: String::from("—"),
         }
     }
 
-    /// Applies a key and reports what the run loop should do.
+    /// Applies a key and reports what the run loop should do. Only a range
+    /// change needs a re-fold; metric and breakdown are derived from the
+    /// analysis already in hand.
     pub fn on_key(&mut self, key: Key) -> Outcome {
         match key {
             Key::Quit => Outcome::Quit,
-            Key::NextTab => {
-                self.tab = self.tab.step(1);
+            Key::NextBreakdown => {
+                self.breakdown = self.breakdown.step(1);
                 Outcome::None
             }
-            Key::PrevTab => {
-                self.tab = self.tab.step(-1);
+            Key::PrevBreakdown => {
+                self.breakdown = self.breakdown.step(-1);
+                Outcome::None
+            }
+            Key::ToggleMetric => {
+                self.metric = self.metric.toggled();
                 Outcome::None
             }
             Key::Range(range) => {
@@ -158,16 +184,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tab_stepping_wraps_both_ways() {
-        assert_eq!(Tab::Overview.step(-1), Tab::Session);
-        assert_eq!(Tab::Session.step(1), Tab::Overview);
+    fn breakdown_stepping_wraps_both_ways() {
+        assert_eq!(Breakdown::Model.step(-1), Breakdown::Session);
+        assert_eq!(Breakdown::Session.step(1), Breakdown::Model);
     }
 
     #[test]
-    fn switching_tab_needs_no_recompute_but_changing_range_does() {
+    fn metric_and_breakdown_need_no_recompute_but_range_does() {
         let mut app = App::new(PriceSource::Bundled, "UTC".into());
-        assert_eq!(app.on_key(Key::NextTab), Outcome::None);
-        assert_eq!(app.tab, Tab::Model);
+        assert_eq!(app.on_key(Key::ToggleMetric), Outcome::None);
+        assert_eq!(app.metric, Metric::Tokens);
+        assert_eq!(app.on_key(Key::NextBreakdown), Outcome::None);
+        assert_eq!(app.breakdown, Breakdown::Day);
         assert_eq!(app.on_key(Key::Range(Range::Week)), Outcome::Recompute);
         assert_eq!(app.on_key(Key::Range(Range::Week)), Outcome::None); // unchanged
         assert_eq!(app.on_key(Key::Quit), Outcome::Quit);
@@ -176,9 +204,9 @@ mod tests {
     #[test]
     fn range_cutoffs_are_ordered() {
         let now = 1_000 * DAY_MS;
-        let sot = now - DAY_MS / 2;
-        assert_eq!(Range::All.cutoff_ms(now, sot), i64::MIN);
-        assert!(Range::Month.cutoff_ms(now, sot) < Range::Week.cutoff_ms(now, sot));
-        assert!(Range::Week.cutoff_ms(now, sot) < Range::Today.cutoff_ms(now, sot));
+        assert_eq!(Range::All.cutoff_ms(now), i64::MIN);
+        assert!(Range::Quarter.cutoff_ms(now) < Range::Month.cutoff_ms(now));
+        assert!(Range::Month.cutoff_ms(now) < Range::Week.cutoff_ms(now));
+        assert!(Range::Week.cutoff_ms(now) < Range::Day.cutoff_ms(now));
     }
 }

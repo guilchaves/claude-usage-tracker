@@ -18,10 +18,10 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
 use crate::core::analysis::analyze;
-use crate::shell::config::{clock_hms, now_ms, start_of_today_ms, Config};
+use crate::shell::config::{clock_hms, now_ms, Config};
 use crate::shell::prices::Prices;
 use crate::shell::scan::Scanner;
-use app::{App, Key, Outcome, Range};
+use app::{App, Breakdown, Key, Outcome, Range};
 
 /// How often the scanner is re-polled. Cheap because unchanged files are
 /// skipped by size and changed files read only their appended tail.
@@ -70,8 +70,7 @@ pub fn run(config: Config, prices: Prices, mut scanner: Scanner) -> io::Result<(
 /// impurity (the clock, the timezone) is resolved here and handed to the pure
 /// core as plain values.
 fn recompute(app: &mut App, scanner: &Scanner, config: &Config, prices: &Prices) {
-    let now = now_ms();
-    let cutoff = app.range.cutoff_ms(now, start_of_today_ms(now, &config.tz));
+    let cutoff = app.range.cutoff_ms(now_ms());
     let to_day = config.day_mapper();
     app.analysis = analyze(
         scanner.records().filter(|record| record.timestamp_ms >= cutoff),
@@ -85,12 +84,14 @@ fn recompute(app: &mut App, scanner: &Scanner, config: &Config, prices: &Prices)
 fn to_key(code: KeyCode) -> Key {
     match code {
         KeyCode::Char('q') | KeyCode::Esc => Key::Quit,
-        KeyCode::Right | KeyCode::Tab | KeyCode::Char('l') => Key::NextTab,
-        KeyCode::Left | KeyCode::BackTab | KeyCode::Char('h') => Key::PrevTab,
-        KeyCode::Char('t') => Key::Range(Range::Today),
-        KeyCode::Char('w') => Key::Range(Range::Week),
-        KeyCode::Char('m') => Key::Range(Range::Month),
-        KeyCode::Char('a') => Key::Range(Range::All),
+        KeyCode::Right | KeyCode::Tab | KeyCode::Char('l') => Key::NextBreakdown,
+        KeyCode::Left | KeyCode::BackTab | KeyCode::Char('h') => Key::PrevBreakdown,
+        KeyCode::Char('1') => Key::Range(Range::Day),
+        KeyCode::Char('2') => Key::Range(Range::Week),
+        KeyCode::Char('3') => Key::Range(Range::Month),
+        KeyCode::Char('4') => Key::Range(Range::Quarter),
+        KeyCode::Char('5') => Key::Range(Range::All),
+        KeyCode::Char(' ') | KeyCode::Char('x') => Key::ToggleMetric,
         KeyCode::Char('r') => Key::Refresh,
         _ => Key::Other,
     }
@@ -98,9 +99,9 @@ fn to_key(code: KeyCode) -> Key {
 
 /// Renders a single frame into an off-screen buffer and returns it as text.
 /// Used by `--render` to preview the dashboard without a live terminal.
-pub fn render_to_string(config: &Config, prices: &Prices, scanner: &Scanner, tab_index: usize, w: u16, h: u16) -> String {
+pub fn render_to_string(config: &Config, prices: &Prices, scanner: &Scanner, breakdown_index: usize, w: u16, h: u16) -> String {
     let mut app = App::new(prices.source, crate::shell::config::zone_label(&config.tz));
-    app.tab = app::Tab::ALL[tab_index % app::Tab::ALL.len()];
+    app.breakdown = Breakdown::ALL[breakdown_index % Breakdown::ALL.len()];
     app.updated_at = clock_hms(&config.tz);
     recompute(&mut app, scanner, config, prices);
 
